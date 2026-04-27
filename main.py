@@ -67,16 +67,27 @@ class ViolationSelect(disnake.ui.Select):
         if gid not in db: db[gid] = {}
         if uid not in db[gid]: db[gid][uid] = []
         v_id = len(db[gid][uid]) + 1
-        db[gid][uid].append({"id": v_id, "type": selected["value"], "fine": selected["fine"], "officer": str(self.officer), "date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M')})
+        db[gid][uid].append({
+            "id": v_id,
+            "type": selected["value"],
+            "fine": selected["fine"],
+            "officer": str(self.officer),
+            "date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+        })
         save_db(DB_FILE, db)
+
         embed = disnake.Embed(title="🚨 تم قيد مخالفة عسكرية", color=disnake.Color.red(), timestamp=datetime.datetime.now())
         embed.add_field(name="👮‍♂️ العسكري", value=self.officer.mention, inline=True)
         embed.add_field(name="👤 المواطن", value=self.member.mention, inline=True)
         embed.add_field(name="📄 نوع المخالفة", value=selected["value"], inline=False)
         embed.add_field(name="💰 الغرامة", value=f"{selected['fine']}", inline=True)
         embed.add_field(name="🔢 رقم المخالفة", value=f"#{v_id}", inline=True)
-        if self.image_url: embed.set_image(url=self.image_url)
+
+        if self.image_url:
+            embed.set_image(url=self.image_url)
+
         embed.set_footer(text="لتسديد المخالفة اكتب: -تسديد")
+
         await inter.message.delete()
         await inter.channel.send(embed=embed)
 
@@ -91,16 +102,23 @@ class PaySelect(disnake.ui.Select):
         db = load_db(DB_FILE)
         gid, uid = str(self.guild_id), str(self.user_id)
         violation = next((v for v in db[gid][uid] if v["id"] == v_id), None)
-        if not violation: return
+        if not violation:
+            return
+
         fine = violation["fine"]
         data = get_user_data(self.guild_id, self.user_id)
-        if data["bank"] >= fine: update_user_data(self.guild_id, self.user_id, bank_amt=-fine)
+
+        if data["bank"] >= fine:
+            update_user_data(self.guild_id, self.user_id, bank_amt=-fine)
         elif (data["bank"] + data["cash"]) >= fine:
             rem = fine - data["bank"]
             update_user_data(self.guild_id, self.user_id, bank_amt=-data["bank"], cash=-rem)
-        else: return await inter.response.send_message(f"❌ رصيدك لا يكفي ({fine})", ephemeral=True)
+        else:
+            return await inter.response.send_message(f"❌ رصيدك لا يكفي ({fine})", ephemeral=True)
+
         db[gid][uid] = [v for v in db[gid][uid] if v["id"] != v_id]
         save_db(DB_FILE, db)
+
         await inter.message.delete()
         await inter.channel.send("✅ تم التسديد")
 
@@ -108,5 +126,10 @@ class PaySelect(disnake.ui.Select):
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
-# ✅ التعديل الوحيد هنا
-bot.run(os.getenv("TOKEN"))
+# 🔥 أهم تعديل (يضمن التوكن + يمنع المشاكل)
+TOKEN = os.environ.get("TOKEN")
+
+if not TOKEN:
+    print("❌ TOKEN NOT FOUND")
+
+bot.run(TOKEN)
