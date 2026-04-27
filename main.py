@@ -68,7 +68,7 @@ VIOLATIONS = [
 ]
 
 # =======================
-# SELECT MENU
+# SELECT
 # =======================
 class ViolationSelect(disnake.ui.Select):
     def __init__(self, member, image):
@@ -110,7 +110,7 @@ class ViolationView(disnake.ui.View):
         self.add_item(ViolationSelect(member, image))
 
 # =======================
-# مخالفة (📸 بدون رابط)
+# مخالفة
 # =======================
 @bot.command(name="مخالفة")
 async def violation(ctx, member: disnake.Member):
@@ -221,12 +221,13 @@ async def withdraw(ctx, amount:int):
     await ctx.send("💸 تم السحب")
 
 # =======================
-# الرواتب (ادمن)
+# الرواتب (شكل احترافي 🔥)
 # =======================
 @bot.command(name="الرواتب")
 @commands.has_permissions(administrator=True)
 async def salaries(ctx):
     now = datetime.datetime.now()
+
     days_ahead = 4 - now.weekday()
     if days_ahead <= 0:
         days_ahead += 7
@@ -240,10 +241,25 @@ async def salaries(ctx):
     minutes = (diff.seconds // 60) % 60
 
     embed = disnake.Embed(color=0x2b2d31)
-    embed.description = f"🕒 حالة الرواتب\n\n📅 كل جمعة 11 مساءً\n\n⏳ باقي:\n{days} يوم و {hours} ساعة و {minutes} دقيقة"
+
+    embed.description = f"""
+🕒 **حالة نظام الرواتب الأسبوعي**
+
+📅 **موعد الصرف الثابت:**
+كل يوم **جمعة الساعة 11:00 مساءً**
+
+⏳ **الموعد القادم خلال:**
+{days} يوم و {hours} ساعة و {minutes} دقيقة
+
+━━━━━━━━━━━━━━━━━━
+وزارة الموارد البشرية | KAIN CITY
+"""
 
     await ctx.send(embed=embed)
 
+# =======================
+# صرف رواتب
+# =======================
 @bot.command(name="صرف-رواتب")
 @commands.has_permissions(administrator=True)
 async def give_salaries(ctx):
