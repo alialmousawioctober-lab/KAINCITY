@@ -45,7 +45,7 @@ def update_user(gid, uid, data):
     save(BANK_FILE, db)
 
 # =======================
-# VIOLATIONS
+# مخالفات
 # =======================
 VIOLATIONS = [
     ("زره", 500),
@@ -67,9 +67,6 @@ VIOLATIONS = [
     ("صدم اقماع", 5000),
 ]
 
-# =======================
-# SELECT
-# =======================
 class ViolationSelect(disnake.ui.Select):
     def __init__(self, member, image):
         options = [disnake.SelectOption(label=v[0], description=str(v[1])) for v in VIOLATIONS]
@@ -95,8 +92,8 @@ class ViolationSelect(disnake.ui.Select):
 
         embed = disnake.Embed(title="🚨 تم تسجيل مخالفة", color=0xff0000)
         embed.add_field(name="👤 المواطن", value=self.member.mention)
-        embed.add_field(name="📄 المخالفة", value=selected)
-        embed.add_field(name="💰 العقوبة", value=str(fine))
+        embed.add_field(name="📄 نوع المخالفة", value=selected)
+        embed.add_field(name="💰 الغرامة", value=str(fine))
 
         if self.image:
             embed.set_image(url=self.image)
@@ -109,9 +106,6 @@ class ViolationView(disnake.ui.View):
         super().__init__()
         self.add_item(ViolationSelect(member, image))
 
-# =======================
-# مخالفة
-# =======================
 @bot.command(name="مخالفة")
 async def violation(ctx, member: disnake.Member):
     image = None
@@ -221,7 +215,7 @@ async def withdraw(ctx, amount:int):
     await ctx.send("💸 تم السحب")
 
 # =======================
-# الرواتب (شكل احترافي 🔥)
+# الرواتب (نفس الصورة 100%)
 # =======================
 @bot.command(name="الرواتب")
 @commands.has_permissions(administrator=True)
@@ -243,17 +237,16 @@ async def salaries(ctx):
     embed = disnake.Embed(color=0x2b2d31)
 
     embed.description = f"""
-🕒 **حالة نظام الرواتب الأسبوعي**
+🕒 حالة نظام الرواتب الأسبوعي
 
-📅 **موعد الصرف الثابت:**
-كل يوم **جمعة الساعة 11:00 مساءً**
+📅 موعد الصرف الثابت:
+كل يوم جمعة الساعة 11:00 مساءً
 
-⏳ **الموعد القادم خلال:**
+⏳ الموعد القادم خلال:
 {days} يوم و {hours} ساعة و {minutes} دقيقة
-
-━━━━━━━━━━━━━━━━━━
-وزارة الموارد البشرية | KAIN CITY
 """
+
+    embed.set_footer(text="وزارة الموارد البشرية | KAIN CITY")
 
     await ctx.send(embed=embed)
 
@@ -301,4 +294,4 @@ async def give(ctx, member: disnake.Member, amount:int):
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
-bot.run(os.getenv("TOKEN"))
+bot.run(os.getenv("TOKEN")) 
