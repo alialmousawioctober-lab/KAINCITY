@@ -4,19 +4,19 @@ import datetime
 import json
 import os
 
-intents = disnake.Intents.default()
-intents.message_content = True
-intents.members = True
-
+intents = disnake.Intents.all()
 bot = commands.Bot(command_prefix="-", intents=intents)
 
-DB_FILE = 'violations.json'
-BANK_FILE = 'bank.json'
-
 # ========= ملفات =========
+DB_FILE = "violations.json"
+BANK_FILE = "bank.json"
+
+SALARY_AMOUNT = 500
+
+# ========= تحميل وحفظ =========
 def load_db(file):
     if os.path.exists(file):
-        with open(file, 'r', encoding='utf-8') as f:
+        with open(file, "r", encoding="utf-8") as f:
             try:
                 return json.load(f)
             except:
@@ -24,87 +24,75 @@ def load_db(file):
     return {}
 
 def save_db(file, data):
-    with open(file, 'w', encoding='utf-8') as f:
+    with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ========= البنك =========
-def get_balance(user_id):
-    data = load_db(BANK_FILE)
-    uid = str(user_id)
+# ========= بنك =========
+def get_user(gid, uid):
+    bank = load_db(BANK_FILE)
+    gid, uid = str(gid), str(uid)
 
-    if uid not in data:
-        data[uid] = {"cash": 0, "bank": 5000, "loan": 0}
-        save_db(BANK_FILE, data)
+    if gid not in bank:
+        bank[gid] = {}
 
-    return data[uid]
+    if uid not in bank[gid]:
+        bank[gid][uid] = {"cash": 0, "bank": 0}
+        save_db(BANK_FILE, bank)
 
-def update_balance(user_id, cash=0, bank=0, loan=0):
-    data = load_db(BANK_FILE)
-    uid = str(user_id)
+    return bank[gid][uid]
 
-    if uid not in data:
-        data[uid] = {"cash": 0, "bank": 5000, "loan": 0}
+def update_user(gid, uid, cash=0, bank_amt=0):
+    bank = load_db(BANK_FILE)
+    gid, uid = str(gid), str(uid)
 
-    data[uid]["cash"] += cash
-    data[uid]["bank"] += bank
-    data[uid]["loan"] += loan
+    data = get_user(gid, uid)
+    data["cash"] += cash
+    data["bank"] += bank_amt
 
-    save_db(BANK_FILE, data)
+    bank[gid][uid] = data
+    save_db(BANK_FILE, bank)
 
 # ========= المخالفات =========
 VIOLATIONS = [
-    {"label": "استخدام الجوال أثناء القيادة", "fine": 300},
-    {"label": "عدم ربط حزام الأمان", "fine": 150},
-    {"label": "قطع الإشارة", "fine": 500},
-    {"label": "سرعة زائدة", "fine": 400},
+    ("زره", "500"),
+    ("قطع اشارة", "3000"),
+    ("عكس سير متعمد", "منع يومين"),
+    ("سحب جلنط متقصد", "1000"),
+    ("سرعة 75-80", "منع يومين"),
+    ("سرعة 81-90", "منع 3 أيام"),
+    ("سرعة 90+", "منع 5 أيام"),
+    ("تجاوز سيارات", "1000"),
+    ("هروب من عسكري", "باند"),
+    ("تطلع الرصيف", "500"),
+    ("بدون لوحة", "3000"),
+    ("تفحيط", "4500"),
+    ("مركبة سبورت بدون تصريح", "3000 + تغيير المركبة"),
+    ("تدوير خط أصفر", "1000"),
+    ("عدم تشغيل أضواء", "500"),
+    ("لوحة مميزة بدون تصريح", "3000"),
+    ("صدم أقماع", "5000 + منع يومين")
 ]
 
-class SelectViolation(disnake.ui.Select):
-    def __init__(self, member, image, officer):
-        options = [
-            disnake.SelectOption(label=v["label"], description=f"الغرامة: {v['fine']}")
-            for v in VIOLATIONS
-        ]
+class SelectMenu(disnake.ui.Select):
+    def __init__(self, member, image):
+        options = [disnake.SelectOption(label=v[0], description=v[1]) for v in VIOLATIONS]
         super().__init__(placeholder="اختر نوع المخالفة...", options=options)
-
         self.member = member
         self.image = image
-        self.officer = officer
 
-    async def callback(self, inter: disnake.MessageInteraction):
-        db = load_db(DB_FILE)
-
-        uid = str(self.member.id)
-        if uid not in db:
-            db[uid] = []
-
-        selected = next(v for v in VIOLATIONS if v["label"] == self.values[0])
-        v_id = len(db[uid]) + 1
-
-        db[uid].append({
-            "id": v_id,
-            "type": selected["label"],
-            "fine": selected["fine"],
-            "officer": str(self.officer),
-            "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        })
-
-        save_db(DB_FILE, db)
-
-        # خصم من البنك
-        update_balance(self.member.id, bank=-selected["fine"])
+    async def callback(self, inter):
+        selected = next(v for v in VIOLATIONS if v[0] == self.values[0])
 
         embed = disnake.Embed(
-            title="📄 تقرير مخالفة مرورية",
+            title="🚨 تم تسجيل مخالفة",
             color=disnake.Color.red(),
             timestamp=datetime.datetime.now()
         )
 
-        embed.add_field(name="👮 العسكري", value=self.officer.mention)
+        embed.add_field(name="👮 العسكري", value=inter.author.mention)
         embed.add_field(name="👤 المواطن", value=self.member.mention)
-        embed.add_field(name="🚫 نوع المخالفة", value=selected["label"], inline=False)
-        embed.add_field(name="💰 الغرامة", value=str(selected["fine"]))
-        embed.add_field(name="🔢 رقم المخالفة", value=f"#{v_id}")
+        embed.add_field(name="📄 المخالفة", value=selected[0], inline=False)
+        embed.add_field(name="💰 العقوبة", value=selected[1])
 
         if self.image:
             embed.set_image(url=self.image)
@@ -113,99 +101,104 @@ class SelectViolation(disnake.ui.Select):
         await inter.channel.send(embed=embed)
 
 class View(disnake.ui.View):
-    def __init__(self, member, image, officer):
+    def __init__(self, member, image):
         super().__init__()
-        self.add_item(SelectViolation(member, image, officer))
+        self.add_item(SelectMenu(member, image))
 
-# ========= أمر مخالفة =========
+# ========= أمر المخالفة =========
 @bot.command(name="مخالفة")
-async def violation(ctx, member: disnake.Member = None):
-    if not member:
-        return await ctx.send("❌ حدد شخص")
-
-    image = None
-    if ctx.message.attachments:
-        image = ctx.message.attachments[0].url
-
+async def violation(ctx, member: disnake.Member, image=None):
     embed = disnake.Embed(
-        title="🚨 نظام المخالفات",
-        description=f"اختر نوع المخالفة لـ {member.mention}",
+        title="نظام المخالفات",
+        description=f"يرجى اختيار نوع المخالفة لـ {member.mention}",
         color=disnake.Color.orange()
     )
 
-    await ctx.send(embed=embed, view=View(member, image, ctx.author))
+    if image:
+        embed.set_image(url=image)
+
+    await ctx.send(embed=embed, view=View(member, image))
 
 # ========= البنك =========
-
-# رصيد
 @bot.command(name="رصيد")
-async def balance(ctx, member: disnake.Member = None):
+async def balance(ctx, member: disnake.Member=None):
     member = member or ctx.author
-    data = get_balance(member.id)
+    data = get_user(ctx.guild.id, member.id)
 
-    embed = disnake.Embed(title="🏦 مصرف الراجحي", color=disnake.Color.green())
-    embed.add_field(name="💵 الكاش", value=data["cash"])
-    embed.add_field(name="🏦 البنك", value=data["bank"])
-    embed.add_field(name="📊 المجموع", value=data["cash"] + data["bank"])
-
-    embed.set_thumbnail(url=member.display_avatar.url)
-    embed.set_footer(text=f"طلب بواسطة: {ctx.author}")
+    embed = disnake.Embed(title="💰 البنك", color=disnake.Color.blue())
+    embed.add_field(name="الكاش", value=data["cash"])
+    embed.add_field(name="البنك", value=data["bank"])
+    embed.add_field(name="المجموع", value=data["cash"] + data["bank"])
 
     await ctx.send(embed=embed)
 
-# تحويل
 @bot.command(name="تحويل")
 async def transfer(ctx, member: disnake.Member, amount: int):
-    if amount <= 0:
-        return await ctx.send("❌ مبلغ غير صحيح")
+    data = get_user(ctx.guild.id, ctx.author.id)
 
-    data = get_balance(ctx.author.id)
+    if data["cash"] < amount:
+        return await ctx.send("❌ ما عندك فلوس")
 
-    if data["bank"] < amount:
-        return await ctx.send("❌ رصيدك ما يكفي")
+    update_user(ctx.guild.id, ctx.author.id, cash=-amount)
+    update_user(ctx.guild.id, member.id, cash=amount)
 
-    update_balance(ctx.author.id, bank=-amount)
-    update_balance(member.id, bank=amount)
+    await ctx.send("✅ تم التحويل")
 
-    await ctx.send(f"✅ تم تحويل {amount} إلى {member.mention}")
-
-# قرض
-@bot.command(name="قرض")
-async def loan(ctx, amount: int):
-    if amount <= 0:
-        return await ctx.send("❌ مبلغ غير صحيح")
-
-    update_balance(ctx.author.id, bank=amount, loan=amount)
-
-    await ctx.send(f"💰 تم إعطاؤك قرض {amount}")
-
-# إيداع
 @bot.command(name="إيداع")
 async def deposit(ctx, amount: int):
-    data = get_balance(ctx.author.id)
+    data = get_user(ctx.guild.id, ctx.author.id)
 
-    if amount > data["cash"]:
-        return await ctx.send("❌ ما عندك كاش كافي")
+    if data["cash"] < amount:
+        return await ctx.send("❌ ما عندك كاش")
 
-    update_balance(ctx.author.id, cash=-amount, bank=amount)
+    update_user(ctx.guild.id, ctx.author.id, cash=-amount, bank_amt=amount)
+    await ctx.send("✅ تم الإيداع")
 
-    await ctx.send(f"🏦 تم إيداع {amount}")
-
-# سحب
 @bot.command(name="سحب")
 async def withdraw(ctx, amount: int):
-    data = get_balance(ctx.author.id)
+    data = get_user(ctx.guild.id, ctx.author.id)
 
-    if amount > data["bank"]:
+    if data["bank"] < amount:
         return await ctx.send("❌ ما عندك رصيد بالبنك")
 
-    update_balance(ctx.author.id, cash=amount, bank=-amount)
+    update_user(ctx.guild.id, ctx.author.id, cash=amount, bank_amt=-amount)
+    await ctx.send("✅ تم السحب")
 
-    await ctx.send(f"💵 تم سحب {amount}")
+@bot.command(name="قرض")
+async def loan(ctx, amount: int):
+    update_user(ctx.guild.id, ctx.author.id, bank_amt=amount)
+    await ctx.send(f"💰 تم إعطاؤك قرض {amount}")
+
+# ========= الرواتب =========
+@bot.command(name="صرف-رواتب")
+async def salaries(ctx):
+    bank = load_db(BANK_FILE)
+    gid = str(ctx.guild.id)
+
+    if gid not in bank:
+        return await ctx.send("❌ ما فيه بيانات")
+
+    count = 0
+    for user in bank[gid]:
+        update_user(ctx.guild.id, user, bank_amt=SALARY_AMOUNT)
+        count += 1
+
+    embed = disnake.Embed(
+        title="💸 تم صرف الرواتب",
+        description=f"تم صرف الرواتب لـ {count} موظف",
+        color=disnake.Color.green()
+    )
+
+    await ctx.send(embed=embed)
+
+# ========= تسديد =========
+@bot.command(name="تسديد")
+async def pay(ctx):
+    await ctx.send("💳 نظام التسديد جاهز (تقدر تطوره لاحقاً)")
 
 # ========= تشغيل =========
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
+    print(f"Logged in as {bot.user}")
 
 bot.run(os.getenv("TOKEN"))
