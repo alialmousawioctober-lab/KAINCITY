@@ -7,13 +7,11 @@ import os
 intents = disnake.Intents.all()
 bot = commands.Bot(command_prefix="-", intents=intents)
 
-# ========= ملفات =========
 DB_FILE = "violations.json"
 BANK_FILE = "bank.json"
-
 SALARY_AMOUNT = 500
 
-# ========= تحميل وحفظ =========
+# ========= داتا =========
 def load_db(file):
     if os.path.exists(file):
         with open(file, "r", encoding="utf-8") as f:
@@ -27,7 +25,6 @@ def save_db(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ========= بنك =========
 def get_user(gid, uid):
     bank = load_db(BANK_FILE)
     gid, uid = str(gid), str(uid)
@@ -73,10 +70,15 @@ VIOLATIONS = [
     ("صدم أقماع", "5000 + منع يومين")
 ]
 
+# ========= Select =========
 class SelectMenu(disnake.ui.Select):
     def __init__(self, member, image):
-        options = [disnake.SelectOption(label=v[0], description=v[1]) for v in VIOLATIONS]
+        options = [
+            disnake.SelectOption(label=v[0], description=v[1])
+            for v in VIOLATIONS
+        ]
         super().__init__(placeholder="اختر نوع المخالفة...", options=options)
+
         self.member = member
         self.image = image
 
@@ -94,6 +96,7 @@ class SelectMenu(disnake.ui.Select):
         embed.add_field(name="📄 المخالفة", value=selected[0], inline=False)
         embed.add_field(name="💰 العقوبة", value=selected[1])
 
+        # 🔥 نفس الصورة
         if self.image:
             embed.set_image(url=self.image)
 
@@ -108,12 +111,14 @@ class View(disnake.ui.View):
 # ========= أمر المخالفة =========
 @bot.command(name="مخالفة")
 async def violation(ctx, member: disnake.Member, image=None):
+
     embed = disnake.Embed(
-        title="نظام المخالفات",
-        description=f"يرجى اختيار نوع المخالفة لـ {member.mention}",
+        title="🚓 نظام المخالفات",
+        description=f"اختر نوع المخالفة لـ {member.mention}",
         color=disnake.Color.orange()
     )
 
+    # 🔥 الصورة هنا
     if image:
         embed.set_image(url=image)
 
@@ -159,7 +164,7 @@ async def withdraw(ctx, amount: int):
     data = get_user(ctx.guild.id, ctx.author.id)
 
     if data["bank"] < amount:
-        return await ctx.send("❌ ما عندك رصيد بالبنك")
+        return await ctx.send("❌ ما عندك بالبنك")
 
     update_user(ctx.guild.id, ctx.author.id, cash=amount, bank_amt=-amount)
     await ctx.send("✅ تم السحب")
@@ -190,11 +195,6 @@ async def salaries(ctx):
     )
 
     await ctx.send(embed=embed)
-
-# ========= تسديد =========
-@bot.command(name="تسديد")
-async def pay(ctx):
-    await ctx.send("💳 نظام التسديد جاهز (تقدر تطوره لاحقاً)")
 
 # ========= تشغيل =========
 @bot.event
