@@ -25,6 +25,7 @@ def save_db(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
+# ========= بنك =========
 def get_user(gid, uid):
     bank = load_db(BANK_FILE)
     gid, uid = str(gid), str(uid)
@@ -89,7 +90,6 @@ class SelectMenu(disnake.ui.Select):
 
         if gid not in db:
             db[gid] = {}
-
         if uid not in db[gid]:
             db[gid][uid] = []
 
@@ -103,11 +103,8 @@ class SelectMenu(disnake.ui.Select):
 
         save_db(DB_FILE, db)
 
-        embed = disnake.Embed(
-            title="🚨 تم تسجيل مخالفة",
-            color=disnake.Color.red()
-        )
-
+        embed = disnake.Embed(title="🚨 تم تسجيل مخالفة", color=disnake.Color.red())
+        embed.add_field(name="👮 العسكري", value=inter.author.mention)
         embed.add_field(name="👤 المواطن", value=self.member.mention)
         embed.add_field(name="📄 المخالفة", value=selected[0], inline=False)
         embed.add_field(name="💰 العقوبة", value=selected[1])
@@ -146,7 +143,7 @@ class PaySelect(disnake.ui.Select):
     def __init__(self, violations, guild_id, user_id):
         options = [
             disnake.SelectOption(
-                label=f"#{v['id']} - {v['type']}",
+                label=f"{v['id']} - {v['type']}",
                 description=v['fine']
             ) for v in violations
         ]
@@ -157,18 +154,16 @@ class PaySelect(disnake.ui.Select):
         self.user_id = user_id
 
     async def callback(self, inter):
-        v_id = int(self.values[0].split("#")[1].split(" ")[0])
+        v_id = int(self.values[0].split(" - ")[0])
 
         db = load_db(DB_FILE)
         gid = str(self.guild_id)
         uid = str(self.user_id)
 
         violation = next((v for v in db[gid][uid] if v["id"] == v_id), None)
-
         if not violation:
             return
 
-        # فقط إذا كانت رقم
         if not violation["fine"].isdigit():
             return await inter.response.send_message("❌ هذه مخالفة بدون غرامة مالية", ephemeral=True)
 
@@ -183,11 +178,7 @@ class PaySelect(disnake.ui.Select):
         db[gid][uid] = [v for v in db[gid][uid] if v["id"] != v_id]
         save_db(DB_FILE, db)
 
-        embed = disnake.Embed(
-            title="✅ تم التسديد",
-            color=disnake.Color.green()
-        )
-
+        embed = disnake.Embed(title="✅ تم التسديد", color=disnake.Color.green())
         embed.add_field(name="💰 المبلغ", value=fine)
         embed.add_field(name="📄 المخالفة", value=violation["type"])
 
@@ -210,12 +201,75 @@ async def pay(ctx):
 
     violations = db[gid][uid]
 
-    embed = disnake.Embed(
-        title="💳 اختر مخالفة للتسديد",
-        color=disnake.Color.blue()
-    )
-
+    embed = disnake.Embed(title="💳 اختر مخالفة للتسديد", color=disnake.Color.blue())
     await ctx.send(embed=embed, view=PayView(violations, ctx.guild.id, ctx.author.id))
+
+# ========= البنك =========
+@bot.command(name="رصيد")
+async def balance(ctx, member: disnake.Member=None):
+    member = member or ctx.author
+    data = get_user(ctx.guild.id, member.id)
+
+    embed = disnake.Embed(title="💰 البنك", color=disnake.Color.blue())
+    embed.add_field(name="الكاش", value=data["cash"])
+    embed.add_field(name="البنك", value=data["bank"])
+    embed.add_field(name="المجموع", value=data["cash"] + data["bank"])
+
+    await ctx.send(embed=embed)
+
+@bot.command(name="تحويل")
+async def transfer(ctx, member: disnake.Member, amount: int):
+    data = get_user(ctx.guild.id, ctx.author.id)
+
+    if data["cash"] < amount:
+        return await ctx.send("❌ ما عندك فلوس")
+
+    update_user(ctx.guild.id, ctx.author.id, cash=-amount)
+    update_user(ctx.guild.id, member.id, cash=amount)
+
+    await ctx.send("✅ تم التحويل")
+
+@bot.command(name="إيداع")
+async def deposit(ctx, amount: int):
+    data = get_user(ctx.guild.id, ctx.author.id)
+
+    if data["cash"] < amount:
+        return await ctx.send("❌ ما عندك كاش")
+
+    update_user(ctx.guild.id, ctx.author.id, cash=-amount, bank_amt=amount)
+    await ctx.send("✅ تم الإيداع")
+
+@bot.command(name="سحب")
+async def withdraw(ctx, amount: int):
+    data = get_user(ctx.guild.id, ctx.author.id)
+
+    if data["bank"] < amount:
+        return await ctx.send("❌ ما عندك بالبنك")
+
+    update_user(ctx.guild.id, ctx.author.id, cash=amount, bank_amt=-amount)
+    await ctx.send("✅ تم السحب")
+
+@bot.command(name="قرض")
+async def loan(ctx, amount: int):
+    update_user(ctx.guild.id, ctx.author.id, bank_amt=amount)
+    await ctx.send(f"💰 تم إعطاؤك قرض {amount}")
+
+# ========= إعطاء (للإدارة) =========
+@bot.command(name="إعطاء")
+@commands.has_permissions(administrator=True)
+async def give(ctx, member: disnake.Member, amount: int):
+    update_user(ctx.guild.id, member.id, bank_amt=amount)
+
+    embed = disnake.Embed(title="💸 تم إعطاء مبلغ", color=disnake.Color.green())
+    embed.add_field(name="👤 الشخص", value=member.mention)
+    embed.add_field(name="💰 المبلغ", value=amount)
+
+    await ctx.send(embed=embed)
+
+@give.error
+async def give_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ للإدارة فقط")
 
 # ========= تشغيل =========
 @bot.event
